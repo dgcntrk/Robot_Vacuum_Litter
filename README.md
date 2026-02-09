@@ -1,105 +1,285 @@
-# Cat Litter Monitor
+# 🤖🐱 Robot Vacuum Litter
 
-Near-realtime cat detection system for litter box monitoring with Apple Silicon optimization.
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![macOS](https://img.shields.io/badge/platform-macos-lightgrey.svg)](https://www.apple.com/macos/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![YOLOv8](https://img.shields.io/badge/YOLOv8-CoreML-green.svg)](https://docs.ultralytics.com/)
 
-## ✨ New: Dynamic Litter Box Detection
+> **AI-powered pet care automation.** Watch your cat's litter box with a camera, detect usage in real-time, and automatically dispatch a **Shark Matrix robot vacuum** to clean up afterward — all without lifting a finger.
 
-**No more manual zone configuration!** The system now automatically detects your litter box using Apple Vision and computer vision techniques:
+![Architecture](https://img.shields.io/badge/Apple%20Silicon-Optimized-FF6B6B?style=flat-square&logo=apple)
+![CoreML](https://img.shields.io/badge/CoreML-Neural%20Engine-4ECDC4?style=flat-square)
+![RTSP](https://img.shields.io/badge/RTSP-Camera-45B7D1?style=flat-square)
 
-- **Apple Vision Rectangle Detection**: Uses the Neural Engine to find box-like containers
-- **Temporal Stabilization**: Smooths detection across frames for stable tracking
-- **Background Subtraction Fallback**: Alternative method for challenging scenes
-- **Camera Shift Resilience**: Automatically re-detects if camera moves
+---
 
-## Architecture Overview
+## 📖 Overview
 
-This is a **2-phase architecture** designed for reliability and performance on Apple Silicon Macs.
+**Robot Vacuum Litter** is an intelligent monitoring system that bridges computer vision and smart home automation. Using Apple Silicon-optimized YOLOv8 detection running on CoreML, it watches your cat's litter box, tracks their visits, and automatically sends your Shark robot vacuum to clean the area once it's safe to do so.
 
-### Phase 1: Detection Pipeline (PRIMARY)
-- Near-realtime cat detection using Apple Neural Engine (CoreML)
-- **Dynamic litter box detection** - no manual zone configuration needed
-- RTSP camera capture with low-latency processing
-- Event-driven architecture
-- <500ms latency from capture to detection event
-
-### Phase 2: Robot Control (Interface/Stub)
-- Clean interface for robot vacuum integration
-- Stub implementation provided - wire your own robot controller
-- Event callbacks for cat entry, exit, and dispatch-ready
-
-## How Dynamic Detection Works
+### How It Works
 
 ```
-┌─────────────┐     ┌─────────────────────┐     ┌─────────────┐
-│   Frame     │────▶│  Litter Box         │────▶│  Tracked    │
-│   Input     │     │  Detection          │     │  Region     │
-└─────────────┘     └─────────────────────┘     └─────────────┘
-                            │
-                            ├──▶ Apple Vision: VNDetectRectanglesRequest
-                            └──▶ Fallback: Background subtraction + contours
-
-┌─────────────┐     ┌─────────────────────┐     ┌─────────────┐
-│   Cat       │────▶│  Zone Overlap       │────▶│  State      │
-│   Detection │     │  Check              │     │  Machine    │
-│   (YOLO)    │     │  (cat bbox vs box)  │     │  Events     │
-└─────────────┘     └─────────────────────┘     └─────────────┘
+┌─────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   RTSP      │────▶│  YOLOv8 CoreML  │────▶│   State Machine │
+│   Camera    │     │  Cat Detection  │     │   (6 States)    │
+└─────────────┘     └─────────────────┘     └────────┬────────┘
+                                                     │
+                         ┌───────────────────────────┘
+                         ▼
+┌─────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Shark     │◀────│   Stakra API    │◀────│  Dispatch Ready │
+│   Matrix    │     │  (Auth0 + HMAC) │     │   Trigger       │
+│   Vacuum    │     └─────────────────┘     └─────────────────┘
+└─────────────┘
 ```
 
-### Detection Methods
+1. **Camera captures** the litter box area via RTSP
+2. **YOLOv8 on CoreML** detects cats in real-time (<500ms latency)
+3. **Dynamic litter box detection** automatically locates the box (no manual zoning!)
+4. **State machine** tracks: `IDLE → CAT_ENTERED → CAT_INSIDE → CAT_EXITED → COOLDOWN → DISPATCH_READY`
+5. **Shark API** dispatches the robot to the configured room
+6. **Emergency stop** triggers if the cat returns while cleaning
 
-| Method | Speed | Accuracy | When Used |
-|--------|-------|----------|-----------|
-| Apple Vision Rectangles | ~10-30ms | High | Primary method on macOS |
-| Background Subtraction | ~20-50ms | Medium | Fallback for challenging scenes |
-| Static Zones | 0ms | Exact | Optional fallback if dynamic fails |
+---
 
-## Installation
+## ✨ Key Features
+
+| Feature | Description |
+|---------|-------------|
+| 🧠 **Real-time Detection** | YOLOv8 running on Apple Neural Engine (CoreML) |
+| 📦 **Auto Zone Detection** | Apple Vision framework automatically finds your litter box |
+| 🎯 **State Machine** | Intelligent occupancy tracking with grace periods & cooldowns |
+| 🤖 **Shark Integration** | Full API control: dispatch, stop, return to dock |
+| 🛡️ **Safety First** | Emergency stop if cat returns during cleaning |
+| 📊 **Web Dashboard** | Live feed, stats, and real-time state visualization |
+| 🍎 **Apple Silicon** | Optimized for M1/M2/M3 Macs using CoreML |
+| 🔧 **Configurable** | YAML-based config with environment overrides |
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart TB
+    subgraph Detection["Detection Pipeline"]
+        A[RTSP Camera] --> B[Frame Capture]
+        B --> C[YOLOv8 CoreML]
+        C --> D[Cat Detection]
+        B --> E[Apple Vision]
+        E --> F[Litter Box Detection]
+    end
+    
+    subgraph State["State Management"]
+        D --> G{Zone Overlap?}
+        F --> G
+        G --> H[Zone State Machine]
+        H --> I[IDLE]
+        H --> J[CAT_ENTERED]
+        H --> K[CAT_INSIDE]
+        H --> L[CAT_EXITED]
+        H --> M[COOLDOWN]
+        H --> N[DISPATCH_READY]
+    end
+    
+    subgraph Robot["Robot Control"]
+        N --> O[Shark Controller]
+        O --> P[Auth0 Auth]
+        P --> Q[Stakra API]
+        Q --> R[Shark Matrix]
+        K -. Emergency .-> S[Emergency Stop]
+        S --> R
+    end
+    
+    subgraph Dashboard["Monitoring"]
+        H --> T[Web Dashboard]
+        T --> U[MJPEG Stream]
+        T --> V[WebSocket Events]
+        T --> W[REST API]
+    end
+```
+
+---
+
+## 🤖 Shark Robot Integration
+
+The **star of the show** — direct control of your Shark Matrix robot vacuum through reverse-engineered APIs.
+
+### Authentication Flow
+
+```python
+# 1. Auth0 Refresh Token → ID Token
+POST https://login.sharkninja.com/oauth/token
+{
+    "grant_type": "refresh_token",
+    "client_id": "YOUR_CLIENT_ID",
+    "refresh_token": "YOUR_REFRESH_TOKEN"
+}
+
+# 2. HMAC-Signed Requests to Stakra API
+# Every request is signed with AWS Signature V4-style HMAC-SHA256
+# using your API key and the current timestamp
+```
+
+### API Capabilities
+
+| Command | API Call | Description |
+|---------|----------|-------------|
+| **Dispatch** | `PATCH /devices/{household}/{dsn}` | Send robot to specific room or whole house |
+| **Stop** | `PATCH` with `Operating_Mode: 0` | Emergency stop |
+| **Return** | `PATCH` with `Operating_Mode: 4` | Return to dock |
+| **Status** | `GET /devices/{household}/{dsn}` | Get robot state, battery, room list |
+
+### Room-Specific Cleaning
+
+```python
+# Configure room-specific dispatch
+areas_payload = {
+    "areas_to_clean": {"UserRoom": ["Litter"]},
+    "clean_count": 1,
+    "floor_id": "floor_1",
+    "cleantype": "dry"
+}
+
+# Send command via device shadow
+await client.set_desired_properties({
+    "AreasToClean_V3": json.dumps(areas_payload),
+    "Operating_Mode": 2  # START
+})
+```
+
+### State Machine Integration
+
+The robot is dispatched only when the state machine reaches `DISPATCH_READY`:
+
+```
+Cat enters ──► CAT_ENTERED ──► CAT_INSIDE ──► Cat exits ──► CAT_EXITED
+     │              │              │                               │
+     │              │              │                               │
+     └──────────────┴──────────────┘                               │
+                    (5s minimum occupancy)                        │
+                                                                  ▼
+                    ┌───────────────────────────────────────► COOLDOWN
+                    │                                          (60s)
+                    │                                              │
+                    │                                              ▼
+                    └──────────────────────────────────────► DISPATCH_READY
+                                                                  │
+                                                                  ▼
+                                                          ┌───────────────┐
+                                                          │ Shark.dispatch │
+                                                          │  (room="Litter")│
+                                                          └───────────────┘
+```
+
+### Emergency Stop
+
+If a cat is detected while the robot is cleaning:
+
+```python
+async def on_cat_entered(session):
+    if not robot.is_available():  # Robot is cleaning
+        logger.warning("Cat detected while cleaning! Emergency stop!")
+        await robot.stop()
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- macOS 12+ with Apple Silicon (M1/M2/M3)
+- Python 3.9+
+- RTSP-capable camera (WiFi IP camera)
+- Shark Matrix robot vacuum
+
+### 1. Clone & Install
 
 ```bash
-# 1. Create virtual environment
-cd /path/to/cat-litter-monitor
+git clone https://github.com/dgcntrk/Robot_Vacuum_Litter.git
+cd Robot_Vacuum_Litter
 python3 -m venv .venv
 source .venv/bin/activate
-
-# 2. Install dependencies
 pip install -e ".[dev]"
+```
 
-# 3. Download CoreML model (or convert your own)
-# See "Model Setup" section below
+### 2. Camera Setup (RTSP)
 
-# 4. Configure
-# Edit config/settings.yaml (minimal config needed now!)
+Configure your IP camera and get the RTSP URL:
 
-# 5. Run
+```yaml
+# config/settings.yaml
+camera:
+  rtsp_url: "rtsp://admin:password@192.168.1.100:554/live0"
+  fps: 15
+  resolution: [640, 480]
+  use_tcp: true
+```
+
+**Common RTSP URL formats:**
+- Reolink: `rtsp://admin:PASSWORD@IP:554/h264Preview_01_main`
+- Hikvision: `rtsp://admin:PASSWORD@IP:554/Streaming/Channels/101`
+- Generic: `rtsp://USER:PASS@IP:554/live`
+
+### 3. Shark Robot Configuration
+
+#### Get Your Credentials
+
+You'll need three pieces of information from your Shark account:
+
+1. **Auth0 Refresh Token** — From mobile app traffic capture
+2. **Household ID** — From Stakra API responses
+3. **DSN** — Device Serial Number (from app)
+
+```bash
+# Save your refresh token
+echo '{"auth0_refresh_token": "YOUR_TOKEN"}' > config/.shark_token
+```
+
+```yaml
+# config/settings.yaml
+robot:
+  enabled: true
+  room_name: "Litter"           # Room name from Shark app
+  type: "shark"
+  household_id: "YOUR_HOUSEHOLD_ID"
+  dsn: "YOUR_DSN"
+  dispatch_delay_seconds: 5     # Wait 5s after cooldown
+  emergency_stop_on_cat_detected: true
+```
+
+### 4. Model Setup
+
+Download or convert a YOLOv8 model:
+
+```bash
+# Option A: Convert yourself
+pip install ultralytics
+yolo export model=yolov8n.pt format=coreml nms=True imgsz=640
+mv yolov8n.mlpackage models/
+
+# Option B: Use pre-converted (see models/ directory)
+```
+
+### 5. Run the Monitor
+
+```bash
 python -m src.main
 ```
 
-## Quick Start
+The system will:
+1. Start the web dashboard at `http://localhost:8080`
+2. Connect to your camera
+3. Auto-detect the litter box (green box will appear)
+4. Begin monitoring for cats
+5. Dispatch the robot when appropriate
 
-1. **Point your camera at the litter box area**
-2. **Run the monitor** - it will automatically detect the litter box within a few seconds
-3. **Watch the green box** appear around the detected litter box
-4. **Press 'r'** in the video window if you need to reset detection (e.g., after moving camera)
+---
 
-## Model Setup
+## 🎛️ Configuration
 
-### Option 1: Use Apple's Vision Framework (Built-in)
-No model download needed - uses `VNRecognizeAnimalsRequest` (cat-only, no bounding boxes).
-
-### Option 2: YOLOv8 CoreML (Recommended)
-```bash
-# Download pre-converted model or convert your own:
-pip install ultralytics
-yolo export model=yolov8n.pt format=coreml nms=True imgsz=640
-# Move output to models/yolov8n.mlpackage
-```
-
-### Option 3: Custom CoreML Model
-Place your `.mlpackage` or `.mlmodel` in the `models/` directory and update config.
-
-## Configuration
-
-Edit `config/settings.yaml`:
+Complete `config/settings.yaml` reference:
 
 ```yaml
 # Camera settings
@@ -107,32 +287,39 @@ camera:
   rtsp_url: "rtsp://YOUR_CAMERA_IP/live0"
   fps: 15
   resolution: [640, 480]
+  use_tcp: true
+  reconnect_interval: 5
 
 # Detection settings
 detection:
   provider: "coreml_yolo"
   model_path: "models/yolov8n.mlpackage"
   confidence_threshold: 0.5
-  inference_interval: 0.2  # 5 FPS detection
-  dynamic_zones: true      # Enable auto-detection (NEW!)
-
-# Static zones are now OPTIONAL - only needed if you disable dynamic_zones
-# zones:
-#   litter_box_1:
-#     name: "Main Litter Box"
-#     bbox: [230, 250, 352, 456]
+  inference_interval: 0.2        # 5 FPS detection
+  dynamic_zones: true            # Auto-detect litter box
+  target_classes: ["cat"]        # What to detect
 
 # State machine timing
 timing:
-  min_occupancy_seconds: 5    # Must see cat for 5s to count as "inside"
-  cooldown_seconds: 60        # Wait 60s after exit before dispatch
-  max_session_minutes: 10     # Timeout if cat sits too long
+  min_occupancy_seconds: 5       # Must see cat 5s to confirm
+  cooldown_seconds: 60           # Wait 60s after exit
+  max_session_minutes: 10        # Timeout if cat sleeps there
 
-# Robot integration
+# Shark robot integration
 robot:
-  enabled: false
+  enabled: true
   room_name: "Litter"
+  type: "shark"
+  household_id: "YOUR_HOUSEHOLD_ID"
+  dsn: "YOUR_DSN"
   dispatch_delay_seconds: 5
+  emergency_stop_on_cat_detected: true
+
+# Web dashboard
+dashboard:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8080
 
 # Event logging
 events:
@@ -142,264 +329,171 @@ events:
 # Visualization
 visualization:
   enabled: true
-  show_zones: true          # Green box = auto-detected litter box
+  show_zones: true
 ```
 
-## How It Works
+---
 
-### Dynamic Litter Box Detection
+## 📊 Web Dashboard
 
-1. **Frame Capture**: RTSP client grabs frames at target FPS
-2. **Litter Box Detection**: 
-   - Primary: Apple Vision `VNDetectRectanglesRequest` finds box-like containers
-   - Filters by size (5-50% of frame), aspect ratio, and centrality
-   - Excludes regions where cats are detected
-3. **Temporal Stabilization**: 
-   - Tracks detections across frames using IoU matching
-   - Applies exponential moving average for smooth bbox
-   - Requires minimum stability before accepting detection
-4. **Cat Detection**: YOLOv8 CoreML detects cats in frame
-5. **Overlap Check**: Determines if cat bounding box overlaps with litter box
-6. **State Machine**: Tracks entry/exit events
+Access at `http://localhost:8080`:
 
-### State Machine
-```
-IDLE → CAT_ENTERED → CAT_INSIDE → CAT_EXITED → COOLDOWN → DISPATCH_READY → IDLE
-       <5s timeout>    <min_occupancy>  <cooldown_seconds>    >fire callback>
-```
+![Dashboard Preview](https://via.placeholder.com/800x400/2d2d2d/ffffff?text=Live+Dashboard+with+MJPEG+Stream)
 
-### Visualization Colors
-- **Green box**: Auto-detected litter box (dynamic)
-- **Orange box**: Manually configured zone (static, if any)
-- **Red text**: Cat inside litter box
-- **Yellow text**: Cat entered/exited
+**Features:**
+- **Live MJPEG stream** with detection overlays
+- **Real-time state display** (color-coded)
+- **Today's statistics** (visits, duration, last visit)
+- **System health** (FPS, latency, uptime)
+- **Event log** with auto-scroll
 
-## Keyboard Controls
+**API Endpoints:**
+- `GET /api/stats` — Current system stats
+- `GET /api/events` — Recent events
+- `GET /video_feed` — MJPEG stream
+- `WS /ws` — WebSocket for live updates
 
-When the video window is open:
-- **q**: Quit the monitor
-- **r**: Reset litter box detection (use if camera moved)
+---
 
-## Environment Variables
+## 🧪 Model Training (Optional)
+
+Train a custom litter box detection model:
 
 ```bash
-# Override settings without editing YAML
-export CAMERA_RTSP_URL="rtsp://YOUR_CAMERA_IP/live0"
-export DETECTION_DYNAMIC_ZONES="true"   # Enable/disable dynamic detection
-export DETECTION_PROVIDER="coreml_yolo"
-export ROBOT_ENABLED="false"
-export ROBOT_ROOM_NAME="Litter"
+# 1. Capture training frames
+python capture_training_frames.py --rtsp-url rtsp://... --output training_data/
+
+# 2. Annotate with YOLO format
+# Place images in training_data/images/ and annotations in training_data/labels/
+
+# 3. Train
+python train_yolo.py --data training_data/ --epochs 100
+
+# 4. Export to CoreML
+python export_coreml.py --weights runs/detect/best.pt
 ```
 
-## Phase 2: Robot Integration
+---
 
-The robot controller is a stub interface. To integrate your robot:
+## 🖥️ Keyboard Controls
 
-1. Implement `BaseRobotController` interface:
+When the video window is open:
 
-```python
-from src.robot.interface import BaseRobotController
+| Key | Action |
+|-----|--------|
+| `q` | Quit the monitor |
+| `r` | Reset litter box detection (use if camera moved) |
 
-class MyRobotController(BaseRobotController):
-    async def connect(self) -> bool:
-        # Connect to robot API
-        return True
-    
-    async def dispatch(self, room: str | None = None) -> bool:
-        # Send robot to clean
-        print(f"Dispatching robot to {room}")
-        return True
-    
-    async def stop(self) -> bool:
-        # Emergency stop
-        return True
-    
-    async def return_to_dock(self) -> bool:
-        # Send home
-        return True
+---
+
+## 🔧 Troubleshooting
+
+### Robot Won't Connect
+
+```bash
+# Check token file exists and is valid
+cat config/.shark_token
+
+# Verify credentials in settings.yaml
+grep -E "household_id|dsn" config/settings.yaml
 ```
-
-2. Wire it in `main.py`:
-
-```python
-from src.robot.interface import RobotAdapter
-
-# Create your controller
-my_robot = MyRobotController(...)
-
-# Wrap in adapter (handles async/sync bridge)
-robot_adapter = RobotAdapter(my_robot)
-
-# Set dispatch callback
-detector.on_dispatch_ready = robot_adapter.on_dispatch_ready
-```
-
-## Performance Tuning
-
-### For Lower Latency
-- Reduce `inference_interval` (e.g., 0.1s = 10 FPS detection)
-- Use lower camera resolution (480p instead of 720p)
-- Use `vision_framework` provider (fastest but no bounding boxes)
-
-### For Lower CPU Usage
-- Increase `inference_interval` (e.g., 0.5s = 2 FPS detection is often enough)
-- Reduce camera FPS if camera supports it
-
-### Apple Silicon Specific
-- CoreML automatically uses Neural Engine when beneficial
-- Apple Vision rectangle detection runs entirely on Neural Engine (~10-30ms)
-- Model compilation happens on first run (cached for subsequent runs)
-
-## Troubleshooting
-
-### Litter Box Not Detected
-- Ensure the litter box is clearly visible (not obstructed)
-- Try pressing 'r' to reset detection
-- Check that the litter box is a rectangular container ( Vision looks for rectangles)
-- Ensure good lighting - very dark scenes may fail
-- Check logs for detection method being used
 
 ### High Latency
+
 ```bash
 # Check camera stream latency
 ffplay -fflags nobuffer -flags low_delay rtsp://your-camera-url
 
-# Verify CoreML is using Neural Engine
-# Look for "ANE" in Activity Monitor during inference
+# Reduce camera resolution in settings.yaml
+camera:
+  resolution: [480, 360]  # Lower = faster
 ```
 
-### Model Loading Errors
-```bash
-# Re-download or re-convert model
-# For YOLO: yolo export model=yolov8n.pt format=coreml nms=True
-```
+### Litter Box Not Detected
 
-### RTSP Connection Issues
-- Ensure camera is on same network
-- Try TCP transport: `rtsp://...?tcp` or configure in YAML
-- Check firewall settings
-
-## Advanced: Static Zones (Fallback)
-
-If dynamic detection doesn't work well for your setup, you can still use static zones:
+1. Ensure good lighting on the litter box
+2. Press `r` to reset detection
+3. Check that the box is rectangular (Apple Vision looks for rectangles)
+4. Consider using static zones as fallback:
 
 ```yaml
 detection:
-  dynamic_zones: false  # Disable auto-detection
-
+  dynamic_zones: false
+  
 zones:
   litter_box_1:
     name: "Main Litter Box"
-    bbox: [230, 250, 352, 456]  # x1, y1, x2, y2 in pixel coords
+    bbox: [230, 250, 352, 456]  # x1, y1, x2, y2
 ```
 
-## Web Dashboard
+---
 
-The cat-litter-monitor includes a built-in web dashboard for real-time monitoring. Access it at `http://localhost:8080` when running.
+## 📁 Project Structure
 
-### Dashboard Features
-
-1. **Live Camera Feed** - MJPEG stream with detection overlays
-   - Green boxes: Litter box zones (auto-detected)
-   - Yellow boxes: Cat detections
-
-2. **Current State** - Large color-coded state indicator
-   - **IDLE** (gray): Waiting for cat
-   - **CAT ENTERED** (yellow): Cat detected, confirming
-   - **CAT INSIDE** (red): Confirmed occupancy
-   - **CAT EXITED** (yellow): Cat left, cooling down
-   - **COOLDOWN** (blue): Waiting before robot dispatch
-   - **DISPATCH READY** (green): Ready to clean
-
-3. **Today's Summary** - Daily statistics
-   - Total litter box visits
-   - Average visit duration
-   - Last visit time
-
-4. **System Health** - Real-time metrics
-   - FPS (inference rate)
-   - Inference latency (ms)
-   - Uptime
-
-5. **Recent Events** - Live event log
-   - State changes
-   - Cat entries/exits
-   - Detection events
-   - Auto-scrolls with latest events
-
-### Dashboard Configuration
-
-```yaml
-# config/settings.yaml
-dashboard:
-  enabled: true       # Enable/disable dashboard
-  host: "0.0.0.0"     # Bind address (0.0.0.0 for all interfaces)
-  port: 8080          # Port to serve on
 ```
-
-Access the dashboard from any device on your network at `http://<machine-ip>:8080`.
-
-### API Endpoints
-
-The dashboard also exposes JSON API endpoints:
-
-- `GET /api/stats` - Current system stats and zone states
-- `GET /api/events?limit=50` - Recent events
-- `GET /api/today` - Today's summary statistics
-- `GET /video_feed` - MJPEG video stream
-- `WS /ws` - WebSocket for real-time updates
-
-## Project Structure
-```
-cat-litter-monitor/
+Robot_Vacuum_Litter/
 ├── src/
-│   ├── __init__.py
-│   ├── main.py                    # Entry point
-│   ├── config.py                  # Settings management
+│   ├── main.py                 # Entry point
 │   ├── camera/
-│   │   ├── __init__.py
-│   │   └── rtsp_client.py         # Low-latency RTSP capture
+│   │   └── rtsp_client.py      # Low-latency RTSP capture
 │   ├── detection/
-│   │   ├── __init__.py
-│   │   ├── coreml_detector.py     # CoreML YOLO inference (cats)
-│   │   ├── litter_box_detector.py # Dynamic litter box detection
-│   │   └── zone_manager.py        # Zone matching logic
+│   │   ├── coreml_detector.py  # YOLOv8 CoreML inference
+│   │   └── litter_box_detector.py  # Dynamic zone detection
 │   ├── state/
-│   │   ├── __init__.py
-│   │   └── fsm.py                 # Litter box state machine
-│   ├── events/
-│   │   ├── __init__.py
-│   │   └── logger.py              # Event logging
+│   │   └── fsm.py              # Litter box state machine
 │   ├── robot/
-│   │   ├── __init__.py
-│   │   ├── interface.py           # Base robot interface
-│   │   └── stub.py                # Stub implementation
-│   └── dashboard/
-│       ├── __init__.py
-│       ├── server.py              # FastAPI web server
-│       └── templates/
-│           └── index.html         # Dashboard UI
+│   │   ├── interface.py        # Base robot controller
+│   │   ├── stub.py             # Stub for testing
+│   │   └── shark.py            # 🦈 Shark Matrix integration
+│   ├── dashboard/
+│   │   └── server.py           # FastAPI web dashboard
+│   └── config.py               # Settings management
 ├── config/
-│   └── settings.yaml
-├── models/                        # CoreML models
-├── logs/                          # Event logs
-├── tests/
-└── README.md
+│   ├── settings.yaml           # Main configuration
+│   └── .shark_token            # Auth credentials (gitignored)
+├── models/                     # CoreML models
+└── logs/                       # Event logs
 ```
 
-## Limitations & Future Improvements
+---
 
-### Current Limitations
-1. **Rectangle Detection**: Works best with rectangular litter boxes; unusual shapes may not be detected
-2. **Single Litter Box**: Currently optimized for detecting one primary litter box
-3. **macOS Required**: Apple Vision framework requires macOS (fallback contour detection works on Linux)
-4. **Initial Detection**: May take 1-2 seconds to stabilize on first run
+## 🛡️ Safety & Privacy
 
-### Future Improvements
-1. **Multi-Box Support**: Detect and track multiple litter boxes simultaneously
-2. **Custom Training**: Fine-tuned model specifically for litter box detection
-3. **Deep SORT Tracking**: More robust tracking across occlusions
-4. **Auto-Calibration**: Learn litter box location over time for more robust detection
+- **Local processing only** — Video never leaves your Mac
+- **No cloud AI** — All inference runs on Apple Neural Engine
+- **Emergency stop** — Robot stops immediately if cat returns
+- **Grace periods** — 3-second detection gaps don't trigger false exits
+- **Session timeouts** — 10-minute max session prevents stuck states
 
-## License
-MIT
+---
+
+## 🤝 Contributing
+
+This project was built for personal use but contributions are welcome! Areas for improvement:
+
+- [ ] Multi-box support (detect multiple litter boxes)
+- [ ] Linux support (non-Apple-Vision fallback)
+- [ ] Additional robot brands (Roomba, Roborock, etc.)
+- [ ] Mobile app for remote monitoring
+
+---
+
+## 📜 License
+
+MIT License — See [LICENSE](LICENSE) for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) for the detection model
+- [FastAPI](https://fastapi.tiangolo.com/) for the dashboard backend
+- The reverse-engineering community for Shark API documentation
+
+---
+
+<div align="center">
+
+**Made with 🐱☕🤖 on Apple Silicon**
+
+</div>
