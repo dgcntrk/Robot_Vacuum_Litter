@@ -224,18 +224,208 @@ camera:
 
 ### 3. Shark Robot Configuration
 
-#### Get Your Credentials
+#### 🔐 Capturing Your Shark Credentials
 
-You'll need three pieces of information from your Shark account:
+This is the most complex part of the setup, but once done, everything works automatically. The Shark app uses **Auth0** for authentication and the **Stakra API** for robot control. You'll need to intercept the app's network traffic to extract the required credentials.
 
-1. **Auth0 Refresh Token** — From mobile app traffic capture
-2. **Household ID** — From Stakra API responses
-3. **DSN** — Device Serial Number (from app)
+##### Required Credentials
+
+| Credential | Description | Where It Appears |
+|------------|-------------|------------------|
+| **Auth0 Refresh Token** | Long-lived token for Auth0 authentication | Auth0 token response body (`refresh_token`) |
+| **Auth0 Client ID** | Your app's client identifier | Auth0 token request body (`client_id`) |
+| **Stakra API Key** | API key for Stakra requests | Stakra API request headers (`x-api-key`) |
+| **Household ID** | Your home's unique identifier | Device list API response (`household_id`) |
+| **DSN** | Device Serial Number (your robot) | Device list API response (`dsn`) |
+| **Floor ID** | Your floor plan's ID | Floor plan API response |
+| **Room Name** | The room you want to clean | Floor plan API response (`rooms` list) |
+
+> 💡 **Note:** The refresh token auto-rotates on each use — the code handles this automatically and updates `config/.shark_token` for you.
+
+##### Method: Network Traffic Interception
+
+You'll need to intercept HTTPS traffic from the Shark/SharkClean mobile app. We recommend **mitmproxy** (free, open-source) or **Charles Proxy** (paid, easier GUI).
+
+###### Step 1: Install mitmproxy (Recommended)
 
 ```bash
-# Save your refresh token
-echo '{"auth0_refresh_token": "YOUR_TOKEN"}' > config/.shark_token
+# macOS with Homebrew
+brew install mitmproxy
+
+# Or download from https://mitmproxy.org/
 ```
+
+###### Step 2: Start the Proxy
+
+```bash
+# Terminal 1: Start mitmproxy with verbose logging
+mitmproxy --mode regular --listen-port 8080
+
+# Or for simpler console output:
+# mitmdump --mode regular --listen-port 8080
+```
+
+###### Step 3: Configure Your Phone
+
+1. **Connect your phone to the same WiFi network as your computer**
+2. **Set up the proxy on your phone:**
+   - **iOS:** Settings → Wi-Fi → (i) next to your network → Configure Proxy → Manual
+     - Server: Your computer's IP address (e.g., `192.168.1.50`)
+     - Port: `8080`
+   - **Android:** Settings → Wi-Fi → Long press your network → Modify → Advanced → Proxy → Manual
+     - Hostname: Your computer's IP address
+     - Port: `8080`
+
+3. **Install the CA certificate on your phone:**
+   - Open Safari/Chrome on your phone
+   - Navigate to `http://mitm.it`
+   - Tap **Get mitmproxy-ca-cert** for your platform
+   - Follow the installation prompts:
+     - **iOS:** Install → Enter passcode → Trust certificate in Settings → General → About → Certificate Trust Settings
+     - **Android:** Install → Name it "mitmproxy" → VPN and apps
+
+###### Step 4: Capture the Credentials
+
+Open the **Shark** or **SharkClean** app on your phone and:
+1. Log out if already logged in
+2. Log back in with your credentials
+3. Navigate through your home/rooms
+4. Watch the mitmproxy window for intercepted requests
+
+###### Step 5: Extract Each Credential
+
+**🔑 Auth0 Refresh Token & Client ID**
+
+Look for a POST request to:
+```
+https://login.sharkninja.com/oauth/token
+```
+
+In the **request body**, you'll find:
+```json
+{
+  "grant_type": "refresh_token",
+  "client_id": "YOUR_AUTH0_CLIENT_ID",     ← Copy this
+  "refresh_token": "YOUR_REFRESH_TOKEN"     ← Copy this
+}
+```
+
+In the **response body**, you'll see:
+```json
+{
+  "access_token": "...",
+  "id_token": "...",
+  "refresh_token": "YOUR_NEW_REFRESH_TOKEN",  ← Also save this
+  "expires_in": 86400
+}
+```
+
+**🔑 Stakra API Key**
+
+Look for requests to:
+```
+https://stakra.slatra.thor.skegox.com/...
+```
+
+In the **request headers**, find:
+```
+x-api-key: YOUR_STAKRA_API_KEY    ← Copy this
+```
+
+**🔑 Household ID & DSN**
+
+Look for a GET request to:
+```
+https://stakra.slatra.thor.skegox.com/devicesEndUserController/{household_id}/devices
+```
+
+Or a response containing your devices:
+```json
+{
+  "devices": [
+    {
+      "dsn": "YOUR_DSN_HERE",              ← Copy this
+      "model": "Shark Matrix",
+      "name": "My Robot"
+    }
+  ],
+  "household_id": "YOUR_HOUSEHOLD_ID"      ← Copy this
+}
+```
+
+**🔑 Floor ID & Room Names**
+
+Look for a request/response related to floor plans:
+```
+https://stakra.slatra.thor.skegox.com/.../floorplan
+```
+
+In the response, you'll find:
+```json
+{
+  "floor_id": "YOUR_FLOOR_ID",           ← Copy this
+  "rooms": [
+    {"id": "room_1", "name": "Kitchen"},
+    {"id": "room_2", "name": "Living Room"},
+    {"id": "room_3", "name": "Litter"}   ← Your target room name
+  ]
+}
+```
+
+###### Step 6: Save Your Credentials
+
+Create the token file:
+```bash
+echo '{"auth0_refresh_token": "YOUR_REFRESH_TOKEN"}' > config/.shark_token
+chmod 600 config/.shark_token  # Keep it secure
+```
+
+Update your `config/settings.yaml`:
+```yaml
+robot:
+  enabled: true
+  room_name: "Litter"           # Exact room name from the app
+  type: "shark"
+  household_id: "YOUR_HOUSEHOLD_ID"
+  dsn: "YOUR_DSN"
+  floor_id: "YOUR_FLOOR_ID"     # Optional, auto-detected if not set
+  dispatch_delay_seconds: 5
+  emergency_stop_on_cat_detected: true
+```
+
+Edit `src/robot/shark.py` and replace the placeholder constants:
+```python
+AUTH0_CLIENT_ID = "YOUR_AUTH0_CLIENT_ID"
+STAKRA_API_KEY = "YOUR_STAKRA_API_KEY"
+```
+
+##### Alternative: Charles Proxy (GUI)
+
+If you prefer a graphical interface:
+1. Download [Charles Proxy](https://www.charlesproxy.com/) (free trial)
+2. Install and launch Charles
+3. Enable SSL Proxying: Proxy → SSL Proxying Settings → Add `*.sharkninja.com` and `*.slatra.thor.skegox.com`
+4. Install the Charles certificate on your phone (Help → SSL Proxying → Install Charles Root Certificate on a Mobile Device)
+5. Follow the same traffic capture steps above
+6. Look for the same requests in Charles' request/response viewer
+
+##### Troubleshooting Credential Capture
+
+**App won't load / SSL errors?**
+- Make sure the CA certificate is properly trusted on your phone
+- On iOS, you must enable the certificate in Settings → General → About → Certificate Trust Settings
+- Some apps use certificate pinning — the Shark app does not, so this should work
+
+**Can't find the requests?**
+- Force-close and reopen the Shark app
+- Log out and log back in to trigger the Auth0 token exchange
+- Check that your phone is actually using the proxy (check mitmproxy's event log)
+- Try toggling WiFi off/on on your phone
+
+**Token expires quickly?**
+- The refresh token is designed to rotate on each use — this is expected
+- The code automatically saves the new token to `config/.shark_token`
+- Only the initial capture requires the manual steps above
 
 ```yaml
 # config/settings.yaml
