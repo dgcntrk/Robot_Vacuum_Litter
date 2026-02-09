@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Project specific
+logs/
+*.log
+*.jsonl
+models/*.mlpackage
+models/*.mlmodel
+# Keep example models - uncomment if you don't want to track .pt files
+# models/*.pt
+models/*.onnx
+
+# Config (keep example)
+config/settings.yaml
+!config/settings.example.yaml
+
+# Sensitive data
+*.token
+*.key
+.env
+config/.shark_token
+config/settings.yaml
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Build artifacts
+*.spec
+
+# Image files that may contain sensitive home data
+crops/
+frame_*.jpg
+test_*.jpg
+training_data/cat_frames/*.jpg
+training_data/images/*.jpg
+training_data/train/images/*.jpg
+training_data/val/images/*.jpg

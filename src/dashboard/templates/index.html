@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cat Litter Monitor Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --border: #30363d;
+            --accent: #58a6ff;
+            --success: #238636;
+            --warning: #d29922;
+            --danger: #da3633;
+            --info: #1f6feb;
+            --state-idle: #6e7681;
+            --state-entered: #d29922;
+            --state-inside: #da3633;
+            --state-exited: #d29922;
+            --state-cooldown: #1f6feb;
+            --state-dispatch: #238636;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+        
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .connection-status {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .connection-status.disconnected {
+            color: var(--danger);
+        }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        @media (max-width: 1100px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .panel-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .panel-content {
+            padding: 1.25rem;
+        }
+        
+        /* Camera Feed */
+        .camera-container {
+            position: relative;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            aspect-ratio: 4/3;
+        }
+        
+        .camera-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .camera-overlay {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .overlay-badge {
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: monospace;
+            color: var(--text-secondary);
+        }
+        
+        /* State Indicator */
+        .state-section {
+            margin-bottom: 1.5rem;
+        }
+        
+        .state-display {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .state-card {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 1.25rem;
+            border-left: 4px solid var(--state-idle);
+            transition: border-color 0.3s ease;
+        }
+        
+        .state-card.idle { border-left-color: var(--state-idle); }
+        .state-card.cat_entered { border-left-color: var(--state-entered); }
+        .state-card.cat_inside { border-left-color: var(--state-inside); }
+        .state-card.cat_exited { border-left-color: var(--state-exited); }
+        .state-card.cooldown { border-left-color: var(--state-cooldown); }
+        .state-card.dispatch_ready { border-left-color: var(--state-dispatch); }
+        
+        .state-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .state-name {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .state-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .state-card.idle .state-value { color: var(--state-idle); }
+        .state-card.cat_entered .state-value { color: var(--state-entered); }
+        .state-card.cat_inside .state-value { color: var(--state-inside); }
+        .state-card.cat_exited .state-value { color: var(--state-exited); }
+        .state-card.cooldown .state-value { color: var(--state-cooldown); }
+        .state-card.dispatch_ready .state-value { color: var(--state-dispatch); }
+        
+        .state-meta {
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .stat-card {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-family: monospace;
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+            text-transform: uppercase;
+        }
+        
+        /* Health Stats */
+        .health-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+        }
+        
+        .health-item {
+            text-align: center;
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+        }
+        
+        .health-value {
+            font-family: monospace;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--accent);
+        }
+        
+        .health-label {
+            font-size: 0.6875rem;
+            color: var(--text-muted);
+            margin-top: 0.125rem;
+        }
+        
+        /* Events List */
+        .events-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .event-item {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            font-size: 0.8125rem;
+            transition: background 0.15s ease;
+        }
+        
+        .event-item:hover {
+            background: var(--bg-tertiary);
+        }
+        
+        .event-item:last-child {
+            border-bottom: none;
+        }
+        
+        .event-icon {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-top: 0.375rem;
+            flex-shrink: 0;
+        }
+        
+        .event-icon.state_change { background: var(--accent); }
+        .event-icon.cat_entered { background: var(--state-entered); }
+        .event-icon.cat_exited { background: var(--state-exited); }
+        .event-icon.dispatch_ready { background: var(--state-dispatch); }
+        .event-icon.detection { background: var(--success); }
+        .event-icon.error { background: var(--danger); }
+        .event-icon.system { background: var(--text-muted); }
+        
+        .event-content {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .event-title {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        
+        .event-details {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            margin-top: 0.125rem;
+        }
+        
+        .event-time {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-family: monospace;
+            white-space: nowrap;
+        }
+        
+        /* Today Summary */
+        .today-summary {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        
+        .today-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .today-row:last-child {
+            border-bottom: none;
+        }
+        
+        .today-label {
+            color: var(--text-secondary);
+            font-size: 0.8125rem;
+        }
+        
+        .today-value {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-family: monospace;
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        @media (max-width: 1100px) {
+            .right-column {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>
+            <span>🐱</span> Cat Litter Monitor
+        </h1>
+        <div class="connection-status" id="connectionStatus">
+            <span class="status-dot"></span>
+            <span>Connected</span>
+        </div>
+    </header>
+    
+    <main class="main-grid">
+        <div class="left-column">
+            <!-- Camera Feed -->
+            <div class="panel" style="margin-bottom: 1.5rem;">
+                <div class="panel-header">
+                    <span>Live Camera Feed</span>
+                    <span style="font-size: 0.75rem; text-transform: none;" id="fpsBadge">-- FPS</span>
+                </div>
+                <div class="panel-content" style="padding: 0;">
+                    <div class="camera-container">
+                        <img id="cameraFeed" class="camera-feed" src="/video_feed" alt="Camera Feed">
+                        <div class="camera-overlay">
+                            <span class="overlay-badge" id="latencyBadge">-- ms</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Current State -->
+            <div class="panel state-section">
+                <div class="panel-header">Current State</div>
+                <div class="panel-content">
+                    <div id="stateContainer" class="state-display">
+                        <div class="state-card idle">
+                            <div class="state-header">
+                                <span class="state-name">Litter Box Zone</span>
+                                <span class="state-value" id="stateValue">IDLE</span>
+                            </div>
+                            <div class="state-meta" id="stateMeta">Waiting for cat...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="right-column">
+            <!-- Today's Stats -->
+            <div class="panel">
+                <div class="panel-header">Today's Summary</div>
+                <div class="panel-content">
+                    <div class="today-summary">
+                        <div class="today-row">
+                            <span class="today-label">Total Visits</span>
+                            <span class="today-value" id="todayVisits">--</span>
+                        </div>
+                        <div class="today-row">
+                            <span class="today-label">Average Duration</span>
+                            <span class="today-value" id="todayAvg">--</span>
+                        </div>
+                        <div class="today-row">
+                            <span class="today-label">Last Visit</span>
+                            <span class="today-value" id="todayLast">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- System Health -->
+            <div class="panel">
+                <div class="panel-header">System Health</div>
+                <div class="panel-content">
+                    <div class="health-grid">
+                        <div class="health-item">
+                            <div class="health-value" id="healthFps">--</div>
+                            <div class="health-label">FPS</div>
+                        </div>
+                        <div class="health-item">
+                            <div class="health-value" id="healthLatency">--</div>
+                            <div class="health-label">Latency</div>
+                        </div>
+                        <div class="health-item">
+                            <div class="health-value" id="healthUptime">--</div>
+                            <div class="health-label">Uptime</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Events -->
+            <div class="panel" style="flex: 1;">
+                <div class="panel-header">
+                    <span>Recent Events</span>
+                    <span style="font-size: 0.75rem; text-transform: none; color: var(--text-muted);" id="eventCount">0 events</span>
+                </div>
+                <div class="panel-content" style="padding: 0;">
+                    <div id="eventsList" class="events-container">
+                        <div class="empty-state">Waiting for events...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <script>
+        // Dashboard State
+        let ws = null;
+        let reconnectInterval = null;
+        let events = [];
+        let currentState = 'idle';
+        
+        // DOM Elements
+        const connectionStatus = document.getElementById('connectionStatus');
+        const stateContainer = document.getElementById('stateContainer');
+        const stateValue = document.getElementById('stateValue');
+        const stateMeta = document.getElementById('stateMeta');
+        const eventsList = document.getElementById('eventsList');
+        const eventCount = document.getElementById('eventCount');
+        const fpsBadge = document.getElementById('fpsBadge');
+        const latencyBadge = document.getElementById('latencyBadge');
+        const todayVisits = document.getElementById('todayVisits');
+        const todayAvg = document.getElementById('todayAvg');
+        const todayLast = document.getElementById('todayLast');
+        const healthFps = document.getElementById('healthFps');
+        const healthLatency = document.getElementById('healthLatency');
+        const healthUptime = document.getElementById('healthUptime');
+        
+        // State display mapping
+        const stateDisplay = {
+            'idle': { text: 'IDLE', desc: 'Waiting for cat...' },
+            'cat_entered': { text: 'CAT ENTERED', desc: 'Confirming occupancy...' },
+            'cat_inside': { text: 'CAT INSIDE', desc: 'Cat is using litter box' },
+            'cat_exited': { text: 'CAT EXITED', desc: 'Cooling down...' },
+            'cooldown': { text: 'COOLDOWN', desc: 'Waiting before dispatch...' },
+            'dispatch_ready': { text: 'DISPATCH READY', desc: 'Ready to clean!' }
+        };
+        
+        // Format duration
+        function formatDuration(seconds) {
+            if (!seconds) return '--';
+            if (seconds < 60) return `${Math.round(seconds)}s`;
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.round(seconds % 60);
+            return `${mins}m ${secs}s`;
+        }
+        
+        // Format time
+        function formatTime(isoString) {
+            if (!isoString) return '--';
+            const date = new Date(isoString);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        // Format uptime
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            if (hours > 0) return `${hours}h ${mins}m`;
+            return `${mins}m`;
+        }
+        
+        // Update connection status
+        function setConnected(connected) {
+            if (connected) {
+                connectionStatus.classList.remove('disconnected');
+                connectionStatus.innerHTML = '<span class="status-dot"></span><span>Connected</span>';
+            } else {
+                connectionStatus.classList.add('disconnected');
+                connectionStatus.innerHTML = '<span style="color: var(--danger);">●</span><span>Disconnected</span>';
+            }
+        }
+        
+        // Update state display
+        function updateState(state, zoneStats = null) {
+            const display = stateDisplay[state] || stateDisplay['idle'];
+            const stateClass = state.toLowerCase().replace(/\s+/g, '_');
+            
+            // Update state card
+            const card = stateContainer.querySelector('.state-card');
+            card.className = `state-card ${stateClass}`;
+            
+            stateValue.textContent = display.text;
+            stateMeta.textContent = display.desc;
+            
+            // Add zone-specific info
+            if (zoneStats && zoneStats.length > 0) {
+                const zone = zoneStats[0];
+                const duration = zone.state_duration_seconds || 0;
+                const sessions = zone.total_sessions || 0;
+                stateMeta.textContent = `${display.desc} • ${formatDuration(duration)} • ${sessions} sessions today`;
+            }
+            
+            currentState = state;
+        }
+        
+        // Update stats
+        function updateStats(stats) {
+            // Health stats
+            if (stats.fps !== undefined) {
+                fpsBadge.textContent = `${stats.fps} FPS`;
+                healthFps.textContent = stats.fps;
+            }
+            if (stats.inference_latency_ms !== undefined) {
+                latencyBadge.textContent = `${stats.inference_latency_ms} ms`;
+                healthLatency.textContent = `${Math.round(stats.inference_latency_ms)}ms`;
+            }
+            if (stats.uptime_seconds !== undefined) {
+                healthUptime.textContent = formatUptime(stats.uptime_seconds);
+            }
+            
+            // Zone state
+            if (stats.zones && stats.zones.length > 0) {
+                updateState(stats.zones[0].state, stats.zones);
+            }
+        }
+        
+        // Update today's stats
+        function updateTodayStats(today) {
+            todayVisits.textContent = today.total_visits || 0;
+            todayAvg.textContent = formatDuration(today.average_duration_seconds);
+            todayLast.textContent = formatTime(today.last_visit_time);
+        }
+        
+        // Get event title
+        function getEventTitle(event) {
+            switch (event.type) {
+                case 'state_change':
+                    const oldState = event.old_state || 'unknown';
+                    const newState = event.new_state || 'unknown';
+                    return `State: ${oldState} → ${newState}`;
+                case 'cat_entered':
+                    return 'Cat entered zone';
+                case 'cat_exited':
+                    return 'Cat exited zone';
+                case 'dispatch_ready':
+                    return 'Ready to dispatch';
+                case 'detection':
+                    return `Detection (${Math.round((event.confidence || 0) * 100)}%)`;
+                case 'system':
+                    return event.message || 'System event';
+                case 'error':
+                    return 'Error';
+                default:
+                    return event.type;
+            }
+        }
+        
+        // Get event details
+        function getEventDetails(event) {
+            const details = [];
+            
+            if (event.zone_name) {
+                details.push(event.zone_name);
+            }
+            if (event.duration_seconds) {
+                details.push(`${Math.round(event.duration_seconds)}s`);
+            }
+            if (event.inference_time_ms) {
+                details.push(`${Math.round(event.inference_time_ms)}ms`);
+            }
+            
+            return details.join(' • ');
+        }
+        
+        // Add event to list
+        function addEvent(event, prepend = true) {
+            // Check for duplicates
+            const eventId = event.timestamp + event.type;
+            if (events.some(e => e.timestamp + e.type === eventId)) {
+                return;
+            }
+            
+            events.unshift(event);
+            if (events.length > 50) {
+                events = events.slice(0, 50);
+            }
+            
+            renderEvents();
+        }
+        
+        // Render events list
+        function renderEvents() {
+            if (events.length === 0) {
+                eventsList.innerHTML = '<div class="empty-state">Waiting for events...</div>';
+                eventCount.textContent = '0 events';
+                return;
+            }
+            
+            eventCount.textContent = `${events.length} events`;
+            
+            eventsList.innerHTML = events.map(event => {
+                const time = new Date(event.timestamp).toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
+                return `
+                    <div class="event-item">
+                        <div class="event-icon ${event.type}"></div>
+                        <div class="event-content">
+                            <div class="event-title">${getEventTitle(event)}</div>
+                            ${getEventDetails(event) ? `<div class="event-details">${getEventDetails(event)}</div>` : ''}
+                        </div>
+                        <div class="event-time">${time}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // Connect WebSocket
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                setConnected(true);
+                if (reconnectInterval) {
+                    clearInterval(reconnectInterval);
+                    reconnectInterval = null;
+                }
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    handleMessage(message);
+                } catch (e) {
+                    console.error('Failed to parse message:', e);
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                setConnected(false);
+                scheduleReconnect();
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                setConnected(false);
+            };
+        }
+        
+        // Handle WebSocket message
+        function handleMessage(message) {
+            switch (message.type) {
+                case 'connected':
+                    if (message.data.stats) {
+                        updateStats(message.data.stats);
+                    }
+                    if (message.data.events) {
+                        events = message.data.events.reverse();
+                        renderEvents();
+                    }
+                    if (message.data.today) {
+                        updateTodayStats(message.data.today);
+                    }
+                    break;
+                    
+                case 'event':
+                    addEvent(message.data);
+                    if (message.stats) {
+                        updateStats(message.stats);
+                    }
+                    break;
+                    
+                case 'state_update':
+                    if (message.data.stats) {
+                        updateStats(message.data.stats);
+                    }
+                    if (message.data.today) {
+                        updateTodayStats(message.data.today);
+                    }
+                    break;
+                    
+                case 'heartbeat':
+                    // Send pong response
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send('pong');
+                    }
+                    break;
+            }
+        }
+        
+        // Schedule reconnect
+        function scheduleReconnect() {
+            if (!reconnectInterval) {
+                reconnectInterval = setInterval(() => {
+                    console.log('Attempting to reconnect...');
+                    connect();
+                }, 3000);
+            }
+        }
+        
+        // Poll for updates (fallback)
+        async function pollUpdates() {
+            try {
+                // Fetch stats
+                const statsRes = await fetch('/api/stats');
+                if (statsRes.ok) {
+                    const stats = await statsRes.json();
+                    updateStats(stats);
+                }
+                
+                // Fetch today's stats
+                const todayRes = await fetch('/api/today');
+                if (todayRes.ok) {
+                    const today = await todayRes.json();
+                    updateTodayStats(today);
+                }
+            } catch (e) {
+                // Silently fail polling
+            }
+        }
+        
+        // Initialize
+        function init() {
+            connect();
+            
+            // Start polling as fallback
+            setInterval(pollUpdates, 5000);
+            
+            // Initial poll
+            pollUpdates();
+        }
+        
+        // Start
+        init();
+    </script>
+</body>
+</html>

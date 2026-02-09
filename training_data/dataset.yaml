@@ -1,0 +1,14 @@
+# YOLO Dataset Configuration for Cat Litter Monitor
+path: /path/to/cat-litter-monitor/training_data  # dataset root directory
+
+# Train/val splits
+train: /path/to/cat-litter-monitor/training_data/train/images
+val: /path/to/cat-litter-monitor/training_data/val/images
+
+# Classes
+names:
+  0: litter_box_main
+  1: litter_box_secondary
+
+# Number of classes
+nc: 2

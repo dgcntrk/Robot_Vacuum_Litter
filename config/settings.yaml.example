@@ -1,0 +1,81 @@
+# Cat Litter Monitor Configuration
+# Copy this file to settings.yaml and customize for your setup
+
+# Camera settings
+camera:
+  rtsp_url: "rtsp://YOUR_CAMERA_IP/live0"  # Your camera RTSP URL
+  fps: 5                               # Target capture FPS (reduced for stability)
+  resolution: [1920, 1080]             # Frame resolution [width, height] - matches your camera
+  reconnect_interval: 5                # Seconds between reconnect attempts
+  buffer_size: 1                       # Frame buffer size (keep low for latency)
+  use_tcp: true                        # Use TCP for RTSP (more reliable)
+
+# Detection settings
+detection:
+  # Provider options:
+  # - "coreml_yolo": YOLOv8 CoreML model (recommended, needs model file)
+  # - "vision_framework": Apple Vision (built-in, no bbox, fastest)
+  # - "manual": No detection, just manual triggers
+  provider: "coreml_yolo"
+  
+  model_path: "models/yolov8n.mlpackage"  # Path to CoreML model
+  confidence_threshold: 0.15              # Minimum detection confidence (lowered for IR/night vision + temporal smoothing)
+  iou_threshold: 0.45                     # NMS IoU threshold
+  inference_interval: 0.2                 # Seconds between inferences (5 FPS)
+  target_classes: ["cat"]                 # Classes to detect
+  
+  # DYNAMIC ZONE DETECTION (NEW)
+  # When enabled, the system automatically detects the litter box using:
+  # 1. Trained YOLOv8 model (primary) - custom model trained on litter box images
+  # 2. Apple Vision rectangle detection (fallback) - looks for box-like containers
+  # 3. Background subtraction + contour detection (fallback) - finds static objects
+  # This eliminates the need for manual zone configuration!
+  dynamic_zones: true  # ENABLED - using YOLO model for dynamic detection
+  litter_box_model_path: "models/litter_box_detector.mlpackage"  # Path to trained litter box detection model
+
+# Static Detection Zones (1920x1080 resolution)
+# These are only used if dynamic_zones is set to false
+zones:
+  litter_box_main:
+    name: "Main Litter Box"
+    bbox: [700, 540, 1050, 980]   # Example: White litter box under table
+  litter_box_secondary:
+    name: "Secondary Box"
+    bbox: [1050, 680, 1320, 950]  # Example: Gray mat/tray to the right
+
+# State machine timing
+timing:
+  min_occupancy_seconds: 5.0    # Must see cat for 5s to count as "inside"
+  cooldown_seconds: 60.0        # Wait 60s after exit before robot dispatch
+  max_session_minutes: 10.0     # Timeout if cat sits too long
+
+# Robot integration (Phase 2)
+robot:
+  enabled: false                # Enable robot control
+  room_name: "Litter"           # Room name for targeted cleaning
+  dispatch_delay_seconds: 5.0   # Delay before dispatching robot
+  emergency_stop_on_cat_detected: true  # Stop robot if cat appears
+  household_id: "YOUR_HOUSEHOLD_ID"
+  dsn: "YOUR_DSN"
+  floor_id: "YOUR_FLOOR_ID"
+
+# Event logging
+events:
+  log_dir: "./logs"             # Event log directory
+  max_history: 1000             # In-memory event history size
+  log_level: "INFO"             # Logging level
+
+# Visualization (for debugging)
+visualization:
+  enabled: true   # Show video window
+  window_name: "Cat Litter Monitor"
+  show_zones: true              # Draw zone boundaries (green = auto-detected)
+  show_detections: true         # Draw detection boxes
+  font_scale: 0.5
+  thickness: 2
+
+# Web Dashboard
+dashboard:
+  enabled: true                 # Enable web dashboard
+  host: "0.0.0.0"              # Host to bind (0.0.0.0 for all interfaces)
+  port: 8080                   # Port for dashboard
